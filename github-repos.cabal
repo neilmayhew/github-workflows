@@ -1,0 +1,38 @@
+cabal-version: 3.0
+name: github-repos
+version: 0.1.0.0
+synopsis: Utilities to query GitHub repositories for a user
+license: MIT
+license-file: LICENSE
+author: Neil Mayhew
+maintainer: neil@mayhew.name
+copyright: 2024
+
+common language
+  default-language: Haskell2010
+
+common warnings
+  ghc-options:
+    -Wall
+    -Wcompat
+    -Wunused-packages
+
+common rts
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+
+executable github-repos
+  import: warnings, language, rts
+  main-is: github-repos.hs
+  build-depends:
+    base,
+    bytestring,
+    http-conduit,
+    microlens,
+    microlens-aeson,
+    optparse-applicative,
+    prettyprinter,
+    terminal-size,
+    yaml,
