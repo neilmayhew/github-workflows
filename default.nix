@@ -1,6 +1,6 @@
 { mkDerivation, base, bytestring, http-conduit, lib, microlens
 , microlens-aeson, optparse-applicative, prettyprinter
-, terminal-size, yaml
+, terminal-size, text, yaml
 }:
 mkDerivation {
   pname = "github-repos";
@@ -10,7 +10,7 @@ mkDerivation {
   isExecutable = true;
   executableHaskellDepends = [
     base bytestring http-conduit microlens microlens-aeson
-    optparse-applicative prettyprinter terminal-size yaml
+    optparse-applicative prettyprinter terminal-size text yaml
   ];
   description = "Utilities to query GitHub repositories for a user";
   license = lib.licenses.mit;

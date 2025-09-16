@@ -5,9 +5,13 @@
 
 import Control.Monad (when)
 import Data.ByteString.Char8 (ByteString)
+import Data.Foldable (for_)
 import Data.Function ((&))
-import Lens.Micro (toListOf, (^?))
-import Lens.Micro.Aeson (key, values, _Bool)
+import Data.Text (Text)
+import Data.Traversable (for)
+import Lens.Micro (toListOf, traversed, (^..), (^?))
+import Lens.Micro.Aeson (key, values, _Bool, _Integral, _String)
+import Lens.Micro.Extras (preview)
 import Network.HTTP.Client.Conduit (throwErrorStatusCodes)
 import Network.HTTP.Conduit (checkResponse)
 import Network.HTTP.Simple
@@ -19,6 +23,8 @@ import System.IO (stderr)
 import Text.Printf (hPrintf, printf)
 
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import qualified Data.Yaml as Yaml
 import qualified System.Console.Terminal.Size as TS
 
@@ -26,7 +32,7 @@ data Options = Options
   { optUser :: String
   , optToken :: Maybe String
   , optPageSize :: Int
-  , optOutput :: FilePath
+  , optOutput :: Maybe FilePath
   }
   deriving (Show)
 
@@ -54,13 +60,11 @@ main = do
                     <> value 20
                     <> showDefault
               optOutput <-
-                strOption $
-                  help "Write output to FILE"
+                optional . strOption $
+                  help "Write workflows to FILE"
                     <> short 'o'
                     <> long "output"
                     <> metavar "FILE"
-                    <> value "/dev/stdout"
-                    <> showDefaultWith id
               optUser <-
                 strArgument $
                   help "The name of the GitHub user"
@@ -117,9 +121,30 @@ main = do
       (toListOf values)
       fetchRepos
 
-  BS.writeFile optOutput . Yaml.encode $
-    let isFork v = or $ v ^? key "fork" . _Bool
-    in filter (not . isFork) repos
+  let
+    isFork v = or $ v ^? key "fork" . _Bool
+    sourceRepos = filter (not . isFork) repos
+
+    fetchWorkflows :: Text -> Int -> IO Yaml.Value
+    fetchWorkflows repo page = do
+      let request =
+            apiRequest
+              ("/repos/" <> T.encodeUtf8 repo <> "/actions/workflows")
+              [ ("per_page", Just . BS.pack $ show optPageSize)
+              , ("page", Just . BS.pack $ show page)
+              ]
+      getResponseBody <$> httpJSON request {checkResponse = throwErrorStatusCodes}
+
+  workflows <- do
+    fmap concat . for (sourceRepos ^.. traversed . key "full_name" . _String) $ \name -> do
+      getPagedItems
+        ("workflows for " <> T.unpack name)
+        (preview $ key "total_count" . _Integral)
+        (toListOf $ key "workflows" . values)
+        (fetchWorkflows name)
+
+  for_ optOutput $ \fp ->
+    BS.writeFile fp . Yaml.encode $ workflows
 
 getPagedItems
   :: String

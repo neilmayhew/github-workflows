@@ -35,4 +35,5 @@ executable github-repos
     optparse-applicative,
     prettyprinter,
     terminal-size,
+    text,
     yaml,
