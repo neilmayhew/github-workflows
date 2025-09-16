@@ -3,6 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 
+import Control.Monad (when)
 import Data.ByteString.Char8 (ByteString)
 import Data.Function ((&))
 import Lens.Micro (toListOf, (^?))
@@ -112,7 +113,7 @@ main = do
   repos <-
     getPagedItems
       "repos"
-      (const $ Just maxBound)
+      (const Nothing)
       (toListOf values)
       fetchRepos
 
@@ -129,14 +130,17 @@ getPagedItems
 getPagedItems name totalF itemsF fetcher = go 1 0 Nothing
  where
   go i n mt = do
-    let progress (show -> t) = printf "%*d/%s" (length t) n t :: String
-    hPrintf stderr "Fetching %s ... %s\n" name (maybe "" progress mt)
+    let progress :: Maybe Int -> String
+        progress (Just (show -> t)) = printf "%*d/%s" (length t) n t
+        progress Nothing = printf "%d" n
+    hPrintf stderr "Fetching %s ... %s\n" name (progress mt)
     page <- fetcher i
     let total = page & totalF
         items = page & itemsF
         n' = n + length items
     case (total, items) of
-      (Just t', _ : _) | n' < t' -> (items ++) <$> go (succ i) n' (Just t')
+      (mt', _ : _) | all (n' <) mt' -> (items ++) <$> go (succ i) n' mt'
       _ -> do
-        hPrintf stderr "Fetched %d %s\n" n' name
+        when (n' > 0) $
+          hPrintf stderr "Fetched %d %s\n" n' name
         pure items
