@@ -24,6 +24,8 @@ import qualified System.Console.Terminal.Size as TS
 data Options = Options
   { optUser :: String
   , optToken :: Maybe String
+  , optPageSize :: Int
+  , optOutput :: FilePath
   }
   deriving (Show)
 
@@ -42,6 +44,22 @@ main = do
                     <> short 't'
                     <> long "token"
                     <> metavar "SECRET"
+              optPageSize <-
+                option auto $
+                  help "The page size to be used when using the GitHub API"
+                    <> short 'p'
+                    <> long "page-size"
+                    <> metavar "INT"
+                    <> value 20
+                    <> showDefault
+              optOutput <-
+                strOption $
+                  help "Write output to FILE"
+                    <> short 'o'
+                    <> long "output"
+                    <> metavar "FILE"
+                    <> value "/dev/stdout"
+                    <> showDefaultWith id
               optUser <-
                 strArgument $
                   help "The name of the GitHub user"
@@ -80,15 +98,13 @@ main = do
         & setRequestPath path
         & setRequestQueryString query
 
-    pageSize = 2 :: Int
-
     fetchRepos :: Int -> IO Yaml.Value
     fetchRepos page = do
       let request =
             apiRequest
               ("/users/" <> BS.pack optUser <> "/repos")
               [ ("type", Just "owner")
-              , ("per_page", Just . BS.pack $ show pageSize)
+              , ("per_page", Just . BS.pack $ show optPageSize)
               , ("page", Just . BS.pack $ show page)
               ]
       getResponseBody <$> httpJSON request {checkResponse = throwErrorStatusCodes}
@@ -100,7 +116,7 @@ main = do
       (toListOf values)
       fetchRepos
 
-  BS.putStr . Yaml.encode $
+  BS.writeFile optOutput . Yaml.encode $
     let isFork v = or $ v ^? key "fork" . _Bool
     in filter (not . isFork) repos
 
