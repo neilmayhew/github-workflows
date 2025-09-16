@@ -33,6 +33,8 @@ data Options = Options
   , optToken :: Maybe String
   , optPageSize :: Int
   , optOutput :: Maybe FilePath
+  , optVerbose :: Bool
+  , optNoop :: Bool
   }
   deriving (Show)
 
@@ -65,6 +67,16 @@ main = do
                     <> short 'o'
                     <> long "output"
                     <> metavar "FILE"
+              optVerbose <-
+                switch $
+                  help "Output progress messages"
+                    <> short 'v'
+                    <> long "verbose"
+              optNoop <-
+                switch $
+                  help "Don't make any modifications"
+                    <> short 'n'
+                    <> long "noop"
               optUser <-
                 strArgument $
                   help "The name of the GitHub user"
