@@ -103,22 +103,29 @@ main = do
   hPrintf stderr "Querying repositories for %s\n" optUser
 
   let
-    apiRequest :: ByteString -> Query -> Request
-    apiRequest path query =
-      defaultRequest
-        & setRequestSecure True
-        & setRequestPort 443
-        & setRequestHost "api.github.com"
+    apiRequest :: Request -> Request
+    apiRequest request =
+      request
         & setRequestBearerAuth (BS.pack token)
         & addRequestHeader "X-GitHub-Api-Version" "2022-11-28"
         & addRequestHeader "User-Agent" "neilmayhew"
+
+    pathRequest :: ByteString -> Query -> Request
+    pathRequest path query =
+      apiRequest defaultRequest
+        & setRequestSecure True
+        & setRequestPort 443
+        & setRequestHost "api.github.com"
         & setRequestPath path
         & setRequestQueryString query
+
+    urlRequest :: String -> Request
+    urlRequest = apiRequest . parseRequest_
 
     fetchRepos :: Int -> IO Yaml.Value
     fetchRepos page = do
       let request =
-            apiRequest
+            pathRequest
               ("/users/" <> BS.pack optUser <> "/repos")
               [ ("type", Just "owner")
               , ("per_page", Just . BS.pack $ show optPageSize)
@@ -140,7 +147,7 @@ main = do
     fetchWorkflows :: Text -> Int -> IO Yaml.Value
     fetchWorkflows repo page = do
       let request =
-            apiRequest
+            pathRequest
               ("/repos/" <> T.encodeUtf8 repo <> "/actions/workflows")
               [ ("per_page", Just . BS.pack $ show optPageSize)
               , ("page", Just . BS.pack $ show page)
@@ -164,13 +171,7 @@ main = do
 
     enableWorkflow :: Text -> IO ()
     enableWorkflow url = do
-      baseRequest <- parseRequest $ T.unpack url <> "/enable"
-      let request =
-            baseRequest
-              & setRequestMethod "PUT"
-              & setRequestBearerAuth (BS.pack token)
-              & addRequestHeader "X-GitHub-Api-Version" "2022-11-28"
-              & addRequestHeader "User-Agent" "neilmayhew"
+      let request = urlRequest ("PUT " <> T.unpack url <> "/enable")
       getResponseBody <$> httpNoBody request {checkResponse = throwErrorStatusCodes}
 
   for_ disabledWorkflowUrls $ \url -> do
