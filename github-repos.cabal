@@ -30,7 +30,7 @@ executable github-repos
     base,
     bytestring,
     http-conduit,
-    microlens,
+    microlens >=0.4.14,
     microlens-aeson,
     optparse-applicative,
     prettyprinter,

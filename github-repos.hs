@@ -3,13 +3,13 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 
-import Control.Monad (when)
+import Control.Monad (unless, when)
 import Data.ByteString.Char8 (ByteString)
 import Data.Foldable (for_)
 import Data.Function ((&))
 import Data.Text (Text)
 import Data.Traversable (for)
-import Lens.Micro (toListOf, traversed, (^..), (^?))
+import Lens.Micro (anyOf, filtered, toListOf, traversed, (^..), (^?))
 import Lens.Micro.Aeson (key, values, _Bool, _Integral, _String)
 import Lens.Micro.Extras (preview)
 import Network.HTTP.Client.Conduit (throwErrorStatusCodes)
@@ -157,6 +157,26 @@ main = do
 
   for_ optOutput $ \fp ->
     BS.writeFile fp . Yaml.encode $ workflows
+
+  let
+    isDisabled = anyOf (key "state" . _String) (== "disabled_inactivity")
+    disabledWorkflowUrls = workflows ^.. traversed . filtered isDisabled . key "url" . _String
+
+    enableWorkflow :: Text -> IO ()
+    enableWorkflow url = do
+      baseRequest <- parseRequest $ T.unpack url <> "/enable"
+      let request =
+            baseRequest
+              & setRequestMethod "PUT"
+              & setRequestBearerAuth (BS.pack token)
+              & addRequestHeader "X-GitHub-Api-Version" "2022-11-28"
+              & addRequestHeader "User-Agent" "neilmayhew"
+      getResponseBody <$> httpNoBody request {checkResponse = throwErrorStatusCodes}
+
+  for_ disabledWorkflowUrls $ \url -> do
+    hPrintf stderr "Enabling %s\n" url
+    unless optNoop $
+      enableWorkflow url
 
 getPagedItems
   :: String
