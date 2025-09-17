@@ -29,10 +29,10 @@ executable github-repos
   build-depends:
     base,
     bytestring,
-    http-conduit,
+    http-conduit >=2.3.8,
     microlens >=0.4.14,
     microlens-aeson,
-    optparse-applicative,
+    optparse-applicative >=0.18.0,
     prettyprinter,
     terminal-size,
     text,
