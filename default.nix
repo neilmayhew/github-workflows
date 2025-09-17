@@ -3,7 +3,7 @@
 , terminal-size, text, yaml
 }:
 mkDerivation {
-  pname = "github-repos";
+  pname = "github-workflows";
   version = "0.1.0.0";
   src = lib.cleanSource ./.;
   isLibrary = false;
@@ -12,7 +12,7 @@ mkDerivation {
     base bytestring http-conduit microlens microlens-aeson
     optparse-applicative prettyprinter terminal-size text yaml
   ];
-  description = "Utilities to query GitHub repositories for a user";
+  description = "Utility to manage GitHub workflows for a user";
   license = lib.licenses.mit;
-  mainProgram = "github-repos";
+  mainProgram = "github-workflows";
 }

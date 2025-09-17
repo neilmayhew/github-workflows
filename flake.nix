@@ -1,5 +1,5 @@
 {
-  description = "Utilities to query GitHub repositories for a user";
+  description = "Utility to manage GitHub workflows for a user";
 
   inputs = { flake-utils.url = "github:numtide/flake-utils"; };
 

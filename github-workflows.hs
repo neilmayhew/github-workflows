@@ -84,7 +84,7 @@ main = do
               pure Options {..}
           )
           ( fullDesc
-              <> header "Query the GitHub repositories of a user"
+              <> header "Manage the GitHub workflows of a user"
               <> footerDoc
                 ( Just . vsep $
                     let wrap = fillSep . map pretty . words

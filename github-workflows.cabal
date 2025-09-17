@@ -1,7 +1,7 @@
 cabal-version: 3.0
-name: github-repos
+name: github-workflows
 version: 0.1.0.0
-synopsis: Utilities to query GitHub repositories for a user
+synopsis: Utility to manage GitHub workflows for a user
 license: MIT
 license-file: LICENSE
 author: Neil Mayhew
@@ -23,9 +23,9 @@ common rts
     -rtsopts
     -with-rtsopts=-N
 
-executable github-repos
+executable github-workflows
   import: warnings, language, rts
-  main-is: github-repos.hs
+  main-is: github-workflows.hs
   build-depends:
     base,
     bytestring,
