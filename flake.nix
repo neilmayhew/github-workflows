@@ -4,15 +4,27 @@
   inputs = { flake-utils.url = "github:numtide/flake-utils"; };
 
   outputs = { self, nixpkgs, flake-utils }:
-    let
-      compiler = "ghc910";
-    in
     flake-utils.lib.eachDefaultSystem (system:
-      with import nixpkgs { inherit system; };
-      with self.packages.${system};
+      with import nixpkgs {
+        inherit system;
+        overlays = [ (import ./haskell-overrides.nix) ];
+      };
+      let
+        packages =
+          lib.attrsets.genAttrs
+            [ "ghc810" "ghc92" "ghc94" "ghc96" "ghc98" "ghc910" "ghc912" ]
+            (compiler: haskell.packages.${compiler}.callPackage ./. { });
+        devShells =
+          lib.attrsets.mapAttrs
+            (_: p: p.env or p)
+            packages;
+      in
       {
-        packages.default = haskell.packages.${compiler}.callPackage ./. { };
-        devShells.default = default.env;
-      }
-    );
+        packages = packages // {
+          default = packages.ghc910;
+        };
+        devShells = devShells // {
+          default = devShells.ghc910;
+        };
+      });
 }
