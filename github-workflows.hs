@@ -5,7 +5,7 @@
 
 import Control.Monad (unless, when)
 import Data.ByteString.Char8 (ByteString)
-import Data.Foldable (for_)
+import Data.Foldable (fold, for_)
 import Data.Function ((&))
 import Data.Text (Text)
 import Data.Traversable (for)
@@ -32,10 +32,15 @@ data Options = Options
   { optUser :: String
   , optToken :: Maybe String
   , optPageSize :: Int
-  , optOutput :: Maybe FilePath
   , optVerbose :: Bool
   , optNoop :: Bool
+  , optCommand :: Command
   }
+  deriving (Show)
+
+data Command
+  = Export FilePath
+  | Reenable
   deriving (Show)
 
 main :: IO ()
@@ -61,12 +66,6 @@ main = do
                     <> metavar "INT"
                     <> value 20
                     <> showDefault
-              optOutput <-
-                optional . strOption $
-                  help "Write workflows to FILE"
-                    <> short 'o'
-                    <> long "output"
-                    <> metavar "FILE"
               optVerbose <-
                 switch $
                   help "Output progress messages"
@@ -78,9 +77,32 @@ main = do
                     <> short 'n'
                     <> long "noop"
               optUser <-
-                strArgument $
+                strOption $
                   help "The name of the GitHub user"
+                    <> short 'u'
+                    <> long "user"
                     <> metavar "USERNAME"
+              optCommand <-
+                hsubparser . fold $
+                  [ command "export" $
+                      info
+                        ( do
+                            output <-
+                              strOption $
+                                help "Write workflows to FILE"
+                                  <> short 'o'
+                                  <> long "output"
+                                  <> metavar "FILE"
+                            pure $ Export output
+                        )
+                        (progDesc "Export workflow metadata")
+                  , command "reenable" $
+                      info
+                        ( do
+                            pure Reenable
+                        )
+                        (progDesc "Re-enable any workflows that were disabled due to inactivity")
+                  ]
               pure Options {..}
           )
           ( fullDesc
@@ -193,19 +215,20 @@ main = do
         (toListOf $ key "workflows" . values)
         (fetchWorkflows name)
 
-  for_ optOutput $ \fp ->
-    BS.writeFile fp . Yaml.encode $ workflows
+  case optCommand of
+    Export fp -> do
+      BS.writeFile fp . Yaml.encode $ workflows
+    Reenable -> do
+      let
+        isDisabled = anyOf (key "state" . _String) (== "disabled_inactivity")
+        disabledWorkflowUrls = workflows ^.. traversed . filtered isDisabled . key "url" . _String
 
-  let
-    isDisabled = anyOf (key "state" . _String) (== "disabled_inactivity")
-    disabledWorkflowUrls = workflows ^.. traversed . filtered isDisabled . key "url" . _String
+        enableWorkflow :: Text -> IO ()
+        enableWorkflow url = do
+          let request = urlRequest ("PUT " <> T.unpack url <> "/enable")
+          getResponseBody <$> httpNoBody request {checkResponse = throwErrorStatusCodes}
 
-    enableWorkflow :: Text -> IO ()
-    enableWorkflow url = do
-      let request = urlRequest ("PUT " <> T.unpack url <> "/enable")
-      getResponseBody <$> httpNoBody request {checkResponse = throwErrorStatusCodes}
-
-  for_ disabledWorkflowUrls $ \url -> do
-    hPrintf stderr "Enabling %s\n" url
-    unless optNoop $
-      enableWorkflow url
+      for_ disabledWorkflowUrls $ \url -> do
+        hPrintf stderr "Enabling %s\n" url
+        unless optNoop $
+          enableWorkflow url
