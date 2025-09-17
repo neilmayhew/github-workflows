@@ -19,7 +19,7 @@ import Options.Applicative
 import Prettyprinter (fillSep, pretty, vsep)
 import System.Environment (lookupEnv)
 import System.Exit (die)
-import System.IO (stderr)
+import System.IO (hPutStrLn, stderr)
 import Text.Printf (hPrintf, printf)
 
 import qualified Data.ByteString.Char8 as BS
@@ -100,9 +100,10 @@ main = do
 
   token <- maybe (die "No authentication token found") pure $ optToken <|> envToken
 
-  hPrintf stderr "Querying repositories for %s\n" optUser
-
   let
+    trace :: String -> IO ()
+    trace s = when optVerbose $ hPutStrLn stderr s
+
     apiRequest :: Request -> Request
     apiRequest request =
       request
@@ -122,6 +123,36 @@ main = do
     urlRequest :: String -> Request
     urlRequest = apiRequest . parseRequest_
 
+    getPagedItems
+      :: String
+      -> (a -> Maybe Int)
+      -> (a -> [b])
+      -> (Int -> IO a)
+      -> IO [b]
+    getPagedItems name totalF itemsF fetcher = go 1 0 Nothing
+     where
+      go i n mt = do
+        let progress :: Maybe Int -> String
+            progress (Just (show -> t)) = printf "%*d/%s" (length t) n t
+            progress Nothing = printf "%d" n
+        trace $ printf "Fetching %s ... %s" name (progress mt)
+        page <- fetcher i
+        let total = page & totalF
+            items = page & itemsF
+            n' = n + length items
+        case (total, items) of
+          (mt', _ : _)
+            | all (n' <) mt' ->
+                (items ++) <$> go (succ i) n' mt'
+          _ -> do
+            when (n' > 0) $
+              trace $
+                printf "Fetched %d %s" n' name
+            pure items
+
+  trace $ printf "Querying repositories for %s" optUser
+
+  let
     fetchRepos :: Int -> IO Yaml.Value
     fetchRepos page = do
       let request =
@@ -178,27 +209,3 @@ main = do
     hPrintf stderr "Enabling %s\n" url
     unless optNoop $
       enableWorkflow url
-
-getPagedItems
-  :: String
-  -> (a -> Maybe Int)
-  -> (a -> [b])
-  -> (Int -> IO a)
-  -> IO [b]
-getPagedItems name totalF itemsF fetcher = go 1 0 Nothing
- where
-  go i n mt = do
-    let progress :: Maybe Int -> String
-        progress (Just (show -> t)) = printf "%*d/%s" (length t) n t
-        progress Nothing = printf "%d" n
-    hPrintf stderr "Fetching %s ... %s\n" name (progress mt)
-    page <- fetcher i
-    let total = page & totalF
-        items = page & itemsF
-        n' = n + length items
-    case (total, items) of
-      (mt', _ : _) | all (n' <) mt' -> (items ++) <$> go (succ i) n' mt'
-      _ -> do
-        when (n' > 0) $
-          hPrintf stderr "Fetched %d %s\n" n' name
-        pure items
