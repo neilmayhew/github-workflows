@@ -8,6 +8,10 @@ author: Neil Mayhew
 maintainer: neil@mayhew.name
 copyright: 2024
 
+flag werror
+  description: Use -Werror
+  default: False
+
 common language
   default-language: Haskell2010
 
@@ -15,7 +19,12 @@ common warnings
   ghc-options:
     -Wall
     -Wcompat
+    -Wredundant-constraints
     -Wunused-packages
+
+  if flag(werror)
+    ghc-options:
+      -Werror
 
 common rts
   ghc-options:
