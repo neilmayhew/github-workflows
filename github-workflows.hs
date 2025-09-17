@@ -9,7 +9,7 @@ import Data.Foldable (fold, for_)
 import Data.Function ((&))
 import Data.Text (Text)
 import Data.Traversable (for)
-import Lens.Micro (anyOf, filtered, toListOf, traversed, (^..), (^?))
+import Lens.Micro (anyOf, filtered, toListOf, traversed, (^.), (^..), (^?))
 import Lens.Micro.Aeson (key, values, _Bool, _Integral, _String)
 import Lens.Micro.Extras (preview)
 import Network.HTTP.Client.Conduit (throwErrorStatusCodes)
@@ -29,8 +29,7 @@ import qualified Data.Yaml as Yaml
 import qualified System.Console.Terminal.Size as TS
 
 data Options = Options
-  { optUser :: String
-  , optToken :: Maybe String
+  { optToken :: Maybe String
   , optPageSize :: Int
   , optVerbose :: Bool
   , optNoop :: Bool
@@ -76,12 +75,6 @@ main = do
                   help "Don't make any modifications"
                     <> short 'n'
                     <> long "noop"
-              optUser <-
-                strOption $
-                  help "The name of the GitHub user"
-                    <> short 'u'
-                    <> long "user"
-                    <> metavar "USERNAME"
               optCommand <-
                 hsubparser . fold $
                   [ command "export" $
@@ -171,20 +164,31 @@ main = do
               trace $
                 printf "Fetched %d %s" n' name
             pure items
+  let
+    fetchUser :: IO Yaml.Value
+    fetchUser = do
+      let request = pathRequest "/user" []
+      getResponseBody <$> httpJSON request {checkResponse = throwErrorStatusCodes}
 
-  trace $ printf "Querying repositories for %s" optUser
+  trace $ printf "Querying the username associated with the token"
+
+  userData <- fetchUser
 
   let
+    user = userData ^. key "login" . _String
+
     fetchRepos :: Int -> IO Yaml.Value
     fetchRepos page = do
       let request =
             pathRequest
-              ("/users/" <> BS.pack optUser <> "/repos")
+              ("/users/" <> T.encodeUtf8 user <> "/repos")
               [ ("type", Just "owner")
               , ("per_page", Just . BS.pack $ show optPageSize)
               , ("page", Just . BS.pack $ show page)
               ]
       getResponseBody <$> httpJSON request {checkResponse = throwErrorStatusCodes}
+
+  trace $ printf "Querying repositories for %s" user
 
   repos <-
     getPagedItems
