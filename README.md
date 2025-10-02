@@ -41,3 +41,17 @@ Available options:
 ```
 
 You can run `reenable` with the `-n` option first to see which workflows it would re-enable.
+
+## Using CI to keep your workflows enabled
+
+1. Fork this repo to your own account/organization
+
+2. Add a repository secret called `GH_TOKEN` containing a personal access token (PAT) that has *Write* access to *Actions*
+
+3. Enable workflows for the repo (initially disabled in forks) on the **Actions** tab
+
+### How it works
+
+There's a scheduled workflow that remakes an empty commit to the `keep-alive` every month. This will ensure that this repo's CI isn't disabled due to inactivity.
+
+The main workflow is scheduled every day and has an optional step that runs the program to re-enable CI in all your other (non-fork) repos. The option is enabled when the workflow is run by the schedule or run manually and the option is chosen.
