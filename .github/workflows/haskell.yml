@@ -4,11 +4,17 @@ on:
   push:
   pull_request:
   workflow_dispatch:  # For manual triggering
+    inputs:
+      run:
+        description: Run the program to re-enable inactive workflows
+        type: boolean
   schedule:
-  - cron: "3 14 15 * *"  # 14:03 on the 15th of every month (UTC)
+  - cron: "11 13 * * *"  # 13:11 UTC every day
 
 jobs:
   build:
+    permissions:
+      actions: write
 
     runs-on: ubuntu-latest
     strategy:
@@ -47,3 +53,10 @@ jobs:
 
     - name: Run tests
       run: cabal test all
+
+    - name: Run
+      if: matrix.ghc == '9.8.4'
+            && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run))
+      run: cabal run -- github-workflows reenable -v
+      env:
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
