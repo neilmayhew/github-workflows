@@ -52,6 +52,6 @@ You can run `reenable` with the `-n` option first to see which workflows it woul
 
 ### How it works
 
-There's a scheduled workflow that remakes an empty commit to the `keep-alive` every month. This will ensure that this repo's CI isn't disabled due to inactivity.
+There's a scheduled workflow that remakes an empty commit to the `keep-alive` branch every month. This will ensure that this repo's CI isn't disabled due to inactivity.
 
 The main workflow is scheduled every day and has an optional step that runs the program to re-enable CI in all your other (non-fork) repos. The option is enabled when the workflow is run by the schedule or run manually and the option is chosen.
