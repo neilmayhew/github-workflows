@@ -251,14 +251,12 @@ main = do
             ]
         isDisabled = anyOf (key "state" . _String) (== "disabled_inactivity")
         shouldEnable = or . sequence [isExpiring, isDisabled]
-        workflowUrls = workflows ^.. traversed . filtered shouldEnable . key "url" . _String
-
-        enableWorkflow :: Text -> IO ()
         enableWorkflow url = do
           let request = urlRequest ("PUT " <> T.unpack url <> "/enable")
           getResponseBody <$> httpNoBody request {checkResponse = throwErrorStatusCodes}
 
-      for_ workflowUrls $ \url -> do
-        hPrintf stderr "Enabling %s\n" url
-        unless optNoop $
-          enableWorkflow url
+      for_ (workflows ^.. traversed . filtered shouldEnable) $ \wf -> do
+        for_ (wf ^? key "url" . _String) $ \url -> do
+          hPrintf stderr "Enabling %s\n" (wf ^. key "html_url" . _String)
+          unless optNoop $
+            enableWorkflow url
