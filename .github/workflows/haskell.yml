@@ -9,7 +9,7 @@ on:
         description: Run the program to re-enable inactive workflows
         type: boolean
   schedule:
-  - cron: "11 13 * * *"  # 13:11 UTC every day
+  - cron: "11 13 * * 5"  # 13:11 UTC every Friday
 
 jobs:
   build:
@@ -32,8 +32,7 @@ jobs:
       with:
         path: ~/.cabal
         key: ${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.ghc }}-
+        restore-keys: ${{ runner.os }}-${{ matrix.ghc }}-
 
     - name: Haskell setup
       uses: haskell-actions/setup@main
@@ -57,6 +56,6 @@ jobs:
     - name: Run
       if: matrix.ghc == '9.8.4'
             && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run))
-      run: cabal run -- github-workflows reenable -v
+      run: cabal run -- github-workflows -v reenable -w 10
       env:
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
