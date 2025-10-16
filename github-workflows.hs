@@ -42,6 +42,7 @@ data Options = Options
   , optVerbose :: Bool
   , optObscure :: Bool
   , optNoop :: Bool
+  , optSaveRepos :: Maybe FilePath
   , optCommand :: Command
   }
   deriving (Show)
@@ -89,6 +90,13 @@ main = do
                   help "Don't make any modifications"
                     <> short 'n'
                     <> long "noop"
+              optSaveRepos <-
+                optional . strOption $
+                  help "Save a copy of the repo metadata to FILE as YAML"
+                    <> short 's'
+                    <> long "save-repos"
+                    <> metavar "FILE"
+                    <> hidden
               optCommand <-
                 hsubparser . fold $
                   [ command "export" $
@@ -96,7 +104,7 @@ main = do
                         ( do
                             output <-
                               strOption $
-                                help "Write workflows to FILE"
+                                help "Write workflows to FILE as YAML"
                                   <> short 'o'
                                   <> long "output"
                                   <> metavar "FILE"
@@ -205,6 +213,9 @@ main = do
       (const Nothing)
       (toListOf values)
       fetchRepos
+
+  for_ optSaveRepos $ \fp ->
+    BS.writeFile fp . Yaml.encode $ repos
 
   let
     isFork = or . preview (key "fork" . _Bool)
