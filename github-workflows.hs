@@ -39,6 +39,7 @@ atKey k = Lens._Object . at k
 data Options = Options
   { optToken :: Maybe String
   , optPageSize :: Int
+  , optForks :: Bool
   , optVerbose :: Bool
   , optObscure :: Bool
   , optNoop :: Bool
@@ -75,6 +76,11 @@ main = do
                     <> metavar "INT"
                     <> value 20
                     <> showDefault
+              optForks <-
+                switch $
+                  help "Include forks"
+                    <> short 'f'
+                    <> long "forks"
               optVerbose <-
                 switch $
                   help "Output progress messages"
@@ -219,7 +225,7 @@ main = do
 
   let
     isFork = or . preview (key "fork" . _Bool)
-    sourceRepos = filter (not . isFork) repos
+    isIncluded = if optForks then const True else not . isFork
 
     fetchWorkflows :: Text -> Int -> IO Yaml.Value
     fetchWorkflows repo page = do
@@ -232,7 +238,7 @@ main = do
       getResponseBody <$> httpJSON request {checkResponse = throwErrorStatusCodes}
 
   workflows <- do
-    fmap concat . for sourceRepos $ \repo ->
+    fmap concat . for (filter isIncluded repos) $ \repo ->
       fmap concat . for (repo ^.. key "full_name" . _String) $ \name -> do
         let
           isPublic = elem "public" . preview (key "visibility" . _String)
