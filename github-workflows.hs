@@ -178,31 +178,20 @@ main = do
               trace $
                 printf "Fetched %d %s" n' name
             pure items
-  let
-    fetchUser :: IO Yaml.Value
-    fetchUser = do
-      let request = pathRequest "/user" []
-      getResponseBody <$> httpJSON request {checkResponse = throwErrorStatusCodes}
-
-  trace $ printf "Querying the username associated with the token"
-
-  userData <- fetchUser
 
   let
-    user = userData ^. key "login" . _String
-
     fetchRepos :: Int -> IO Yaml.Value
     fetchRepos page = do
       let request =
             pathRequest
-              ("/users/" <> T.encodeUtf8 user <> "/repos")
+              "/user/repos"
               [ ("type", Just "owner")
               , ("per_page", Just . BS.pack $ show optPageSize)
               , ("page", Just . BS.pack $ show page)
               ]
       getResponseBody <$> httpJSON request {checkResponse = throwErrorStatusCodes}
 
-  trace $ printf "Querying repositories for %s" user
+  trace "Querying repositories for the current user"
 
   repos <-
     getPagedItems
@@ -212,7 +201,7 @@ main = do
       fetchRepos
 
   let
-    isFork v = or $ v ^? key "fork" . _Bool
+    isFork = or . preview (key "fork" . _Bool)
     sourceRepos = filter (not . isFork) repos
 
     fetchWorkflows :: Text -> Int -> IO Yaml.Value
