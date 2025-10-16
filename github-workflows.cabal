@@ -36,6 +36,7 @@ executable github-workflows
   import: warnings, language, rts
   main-is: github-workflows.hs
   build-depends:
+    aeson,
     base,
     bytestring,
     http-conduit >=2.3.8,
@@ -45,4 +46,5 @@ executable github-workflows
     prettyprinter,
     terminal-size,
     text,
+    time,
     yaml,

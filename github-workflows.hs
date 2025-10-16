@@ -1,5 +1,6 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -8,9 +9,10 @@ import Data.ByteString.Char8 (ByteString)
 import Data.Foldable (fold, for_)
 import Data.Function ((&))
 import Data.Text (Text)
+import Data.Time (addUTCTime, getCurrentTime, nominalDay)
 import Data.Traversable (for)
-import Lens.Micro (anyOf, filtered, toListOf, traversed, (^.), (^..), (^?))
-import Lens.Micro.Aeson (key, values, _Bool, _Integral, _String)
+import Lens.Micro (anyOf, at, filtered, toListOf, traversed, (^.), (^..), (^?), (.~))
+import Lens.Micro.Aeson (key, values, _Bool, _Integral, _JSON, _String)
 import Lens.Micro.Extras (preview)
 import Network.HTTP.Client.Conduit (throwErrorStatusCodes)
 import Network.HTTP.Conduit (checkResponse)
@@ -22,11 +24,17 @@ import System.Exit (die)
 import System.IO (hPutStrLn, stderr)
 import Text.Printf (hPrintf, printf)
 
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Yaml as Yaml
+import qualified Lens.Micro as Lens
+import qualified Lens.Micro.Aeson as Lens
 import qualified System.Console.Terminal.Size as TS
+
+atKey :: Lens.AsValue t => Aeson.Key -> Lens.Traversal' t (Maybe Aeson.Value)
+atKey k = Lens._Object . at k
 
 data Options = Options
   { optToken :: Maybe String
@@ -39,7 +47,7 @@ data Options = Options
 
 data Command
   = Export FilePath
-  | Reenable
+  | Reenable (Maybe Int)
   deriving (Show)
 
 main :: IO ()
@@ -92,7 +100,13 @@ main = do
                   , command "reenable" $
                       info
                         ( do
-                            pure Reenable
+                            days <-
+                              optional . option auto $
+                                help "Also reenable any workflows that will be disabled within the next DAYS days"
+                                  <> short 'w'
+                                  <> long "within"
+                                  <> metavar "DAYS"
+                            pure $ Reenable days
                         )
                         (progDesc "Re-enable any workflows that were disabled due to inactivity")
                   ]
@@ -212,27 +226,39 @@ main = do
       getResponseBody <$> httpJSON request {checkResponse = throwErrorStatusCodes}
 
   workflows <- do
-    fmap concat . for (sourceRepos ^.. traversed . key "full_name" . _String) $ \name -> do
-      getPagedItems
-        ("workflows for " <> T.unpack name)
-        (preview $ key "total_count" . _Integral)
-        (toListOf $ key "workflows" . values)
-        (fetchWorkflows name)
+    fmap concat . for sourceRepos $ \repo ->
+      fmap concat . for (repo ^.. key "full_name" . _String) $ \name -> do
+        let pushed = repo ^? key "pushed_at"
+        getPagedItems
+          ("workflows for " <> T.unpack name)
+          (preview $ key "total_count" . _Integral)
+          (map (atKey "last_pushed" .~ pushed) . toListOf (key "workflows" . values))
+          (fetchWorkflows name)
 
   case optCommand of
     Export fp -> do
       BS.writeFile fp . Yaml.encode $ workflows
-    Reenable -> do
+    Reenable mDays -> do
+      now <- getCurrentTime
       let
+        cutoff days = addUTCTime (fromIntegral (days - 60) * nominalDay) now
+        isOld t = any ((t <) . cutoff) mDays
+        isExpiring =
+          and . sequence
+            [ anyOf (key "state" . _String) (== "active")
+            , anyOf (key "updated_at" . _JSON) isOld
+            , anyOf (key "last_pushed" . _JSON) isOld
+            ]
         isDisabled = anyOf (key "state" . _String) (== "disabled_inactivity")
-        disabledWorkflowUrls = workflows ^.. traversed . filtered isDisabled . key "url" . _String
+        shouldEnable = or . sequence [isExpiring, isDisabled]
+        workflowUrls = workflows ^.. traversed . filtered shouldEnable . key "url" . _String
 
         enableWorkflow :: Text -> IO ()
         enableWorkflow url = do
           let request = urlRequest ("PUT " <> T.unpack url <> "/enable")
           getResponseBody <$> httpNoBody request {checkResponse = throwErrorStatusCodes}
 
-      for_ disabledWorkflowUrls $ \url -> do
+      for_ workflowUrls $ \url -> do
         hPrintf stderr "Enabling %s\n" url
         unless optNoop $
           enableWorkflow url

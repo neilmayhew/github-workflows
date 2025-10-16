@@ -1,6 +1,6 @@
 { mkDerivation, base, bytestring, http-conduit, lib, microlens
 , microlens-aeson, optparse-applicative, prettyprinter
-, terminal-size, text, yaml
+, terminal-size, text, time, yaml
 }:
 mkDerivation {
   pname = "github-workflows";
@@ -10,7 +10,7 @@ mkDerivation {
   isExecutable = true;
   executableHaskellDepends = [
     base bytestring http-conduit microlens microlens-aeson
-    optparse-applicative prettyprinter terminal-size text yaml
+    optparse-applicative prettyprinter terminal-size text time yaml
   ];
   description = "Utility to manage GitHub workflows for a user";
   license = lib.licenses.mit;
