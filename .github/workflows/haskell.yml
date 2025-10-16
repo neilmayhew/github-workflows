@@ -56,6 +56,6 @@ jobs:
     - name: Run
       if: matrix.ghc == '9.8.4'
             && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run))
-      run: cabal run -- github-workflows -v reenable -w 10
+      run: cabal run -- github-workflows -vb reenable -w 10
       env:
         GH_TOKEN: ${{ secrets.GH_TOKEN }}

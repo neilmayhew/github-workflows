@@ -11,7 +11,7 @@ import Data.Function ((&))
 import Data.Text (Text)
 import Data.Time (addUTCTime, getCurrentTime, nominalDay)
 import Data.Traversable (for)
-import Lens.Micro (anyOf, at, filtered, toListOf, traversed, (^.), (^..), (^?), (.~))
+import Lens.Micro (anyOf, at, filtered, non, toListOf, traversed, (.~), (^.), (^..), (^?))
 import Lens.Micro.Aeson (key, values, _Bool, _Integral, _JSON, _String)
 import Lens.Micro.Extras (preview)
 import Network.HTTP.Client.Conduit (throwErrorStatusCodes)
@@ -40,6 +40,7 @@ data Options = Options
   { optToken :: Maybe String
   , optPageSize :: Int
   , optVerbose :: Bool
+  , optObscure :: Bool
   , optNoop :: Bool
   , optCommand :: Command
   }
@@ -78,6 +79,11 @@ main = do
                   help "Output progress messages"
                     <> short 'v'
                     <> long "verbose"
+              optObscure <-
+                switch $
+                  help "Obscure private repo names in output messages"
+                    <> short 'b'
+                    <> long "obscure"
               optNoop <-
                 switch $
                   help "Don't make any modifications"
@@ -217,11 +223,21 @@ main = do
   workflows <- do
     fmap concat . for sourceRepos $ \repo ->
       fmap concat . for (repo ^.. key "full_name" . _String) $ \name -> do
-        let pushed = repo ^? key "pushed_at"
+        let
+          isPublic = elem "public" . preview (key "visibility" . _String)
+          pushed = repo ^? key "pushed_at"
+          obscure s =
+            let n = min 2 $ (T.length s - 2) `div` 2
+             in T.take n s <> "****" <> T.takeEnd n s
+          protectedName =
+            if isPublic repo || not optObscure
+              then name
+              else (repo ^. key "owner" . key "login" . _String) <> "/" <> obscure (repo ^. key "name" . _String)
+          addInfo = (atKey "last_pushed" .~ pushed) . (atKey "repo_name" . non "" . _String .~ protectedName)
         getPagedItems
-          ("workflows for " <> T.unpack name)
+          ("workflows for " <> T.unpack protectedName)
           (preview $ key "total_count" . _Integral)
-          (map (atKey "last_pushed" .~ pushed) . toListOf (key "workflows" . values))
+          (map addInfo . toListOf (key "workflows" . values))
           (fetchWorkflows name)
 
   case optCommand of
@@ -246,6 +262,6 @@ main = do
 
       for_ (workflows ^.. traversed . filtered shouldEnable) $ \wf -> do
         for_ (wf ^? key "url" . _String) $ \url -> do
-          hPrintf stderr "Enabling %s\n" (wf ^. key "html_url" . _String)
+          hPrintf stderr "Enabling \"%s\" in %s\n" (wf ^. key "name" . _String) (wf ^. key "repo_name" . _String)
           unless optNoop $
             enableWorkflow url
