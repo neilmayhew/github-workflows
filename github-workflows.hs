@@ -8,6 +8,7 @@ import Control.Monad (unless, when)
 import Data.ByteString.Char8 (ByteString)
 import Data.Foldable (fold, for_)
 import Data.Function ((&))
+import Data.List (sortOn)
 import Data.Text (Text)
 import Data.Time (addUTCTime, getCurrentTime, nominalDay)
 import Data.Traversable (for)
@@ -40,6 +41,7 @@ data Options = Options
   { optToken :: Maybe String
   , optPageSize :: Int
   , optForks :: Bool
+  , optAdditionalRepos :: [Text]
   , optVerbose :: Bool
   , optObscure :: Bool
   , optNoop :: Bool
@@ -81,6 +83,12 @@ main = do
                   help "Include forks"
                     <> short 'f'
                     <> long "forks"
+              optAdditionalRepos <-
+                many . strOption $
+                  help "Add REPO to the list of repos to be processed (may be repeated)"
+                    <> short 'a'
+                    <> long "add"
+                    <> metavar "REPO"
               optVerbose <-
                 switch $
                   help "Output progress messages"
@@ -213,20 +221,31 @@ main = do
 
   trace "Querying repositories for the current user"
 
-  repos <-
+  userRepos <-
     getPagedItems
-      "repos"
+      "user repos"
       (const Nothing)
       (toListOf values)
       fetchRepos
 
-  for_ optSaveRepos $ \fp ->
-    BS.writeFile fp . Yaml.encode $ repos
+  let
+    fetchRepo :: Text -> IO Yaml.Value
+    fetchRepo repo = do
+      trace $ printf "Fetching %s" repo
+      let request = pathRequest ("/repos/" <> T.encodeUtf8 repo) []
+      getResponseBody <$> httpJSON request {checkResponse = throwErrorStatusCodes}
+
+  additionalRepos <- for optAdditionalRepos fetchRepo
 
   let
     isFork = or . preview (key "fork" . _Bool)
     isIncluded = if optForks then const True else not . isFork
+    allRepos = sortOn (preview $ key "full_name" . _String) $ filter isIncluded userRepos <> additionalRepos
 
+  for_ optSaveRepos $ \fp ->
+    BS.writeFile fp . Yaml.encode $ allRepos
+
+  let
     fetchWorkflows :: Text -> Int -> IO Yaml.Value
     fetchWorkflows repo page = do
       let request =
@@ -238,7 +257,7 @@ main = do
       getResponseBody <$> httpJSON request {checkResponse = throwErrorStatusCodes}
 
   workflows <- do
-    fmap concat . for (filter isIncluded repos) $ \repo ->
+    fmap concat . for allRepos $ \repo ->
       fmap concat . for (repo ^.. key "full_name" . _String) $ \name -> do
         let
           isPublic = elem "public" . preview (key "visibility" . _String)
