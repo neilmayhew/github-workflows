@@ -39,6 +39,7 @@ executable github-workflows
     aeson,
     base,
     bytestring,
+    containers,
     http-conduit >=2.3.8,
     microlens >=0.4.14,
     microlens-aeson,

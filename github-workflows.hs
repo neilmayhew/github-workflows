@@ -6,6 +6,7 @@
 
 import Control.Monad (unless, when)
 import Data.ByteString.Char8 (ByteString)
+import Data.Set ((\\))
 import Data.Foldable (fold, for_)
 import Data.Function ((&))
 import Data.List (sortOn)
@@ -27,6 +28,7 @@ import Text.Printf (hPrintf, printf)
 
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Yaml as Yaml
@@ -229,13 +231,17 @@ main = do
       fetchRepos
 
   let
+    userRepoNames = Set.fromList $ userRepos ^.. traversed . key "full_name" . _String
+    additionalRepoNames = Set.fromList optAdditionalRepos
+
+  let
     fetchRepo :: Text -> IO Yaml.Value
     fetchRepo repo = do
       trace $ printf "Fetching %s" repo
       let request = pathRequest ("/repos/" <> T.encodeUtf8 repo) []
       getResponseBody <$> httpJSON request {checkResponse = throwErrorStatusCodes}
 
-  additionalRepos <- for optAdditionalRepos fetchRepo
+  additionalRepos <- traverse fetchRepo . Set.toList $ additionalRepoNames \\ userRepoNames
 
   let
     isFork = or . preview (key "fork" . _Bool)
