@@ -3,3 +3,5 @@ packages: .
 constraints:
   -- Needed for `setRequestBearerAuth` to be enabled in `http-conduit`
   http-client >=0.7.6,
+  -- crypton-1.1.0 breaks http-client-tls
+  crypton <1.1,
