@@ -13,7 +13,7 @@
         packages =
           lib.attrsets.genAttrs
             [ "ghc810" "ghc92" "ghc94" "ghc96" "ghc98" "ghc910" "ghc912" ]
-            (compiler: haskell.packages.${compiler}.callPackage ./. { });
+            (compiler: haskell.packages.${compiler}.callCabal2nix "" ./. { });
         devShells =
           lib.attrsets.mapAttrs
             (_: p: p.env or p)
